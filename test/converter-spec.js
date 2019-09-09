@@ -78,4 +78,27 @@ describe('the converter', function () {
         expect(convertResult.collection.requests[0].pathVariables.unusedParameter).to.be(undefined);
         expect(convertResult.collection.requests[0].pathVariables.referencedParameter).to.be('{{referencedParameter}}');
     });
+
+    it('should transform parameters based on options.transforms', function () {
+        var samplePath = path.join(__dirname, 'data', 'swagger2-with-transformed-params.json'),
+            swagger = require(samplePath),
+            converter = new Swagger2Postman({
+                transforms: {
+                    header: {
+                        'api-key': '{{API_KEY}}',
+                        'Authorization': 'Bearer {{ACCESS_TOKEN}}',
+                        'withDefaultValue': '{{WITH_DEFAULT_VALUE}}'
+                    },
+                    path: {
+                        'ownerId': '{{OWNER_ID}}'
+                    }
+                }
+            }),
+            convertResult = converter.convert(swagger);
+
+        expect(convertResult.collection.requests[0].pathVariables.ownerId).to.be('{{OWNER_ID}}');
+        expect(convertResult.collection.requests[0].pathVariables.petId).to.be('{{petId}}');
+        expect(convertResult.collection.requests[0].headers).to.be(
+                'api-key: {{API_KEY}}\nAuthorization: Bearer {{ACCESS_TOKEN}}\nwithDefaultValue: 42\n');
+    });
 });
