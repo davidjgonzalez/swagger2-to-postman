@@ -20,6 +20,7 @@ var uuidv4 = require('uuid/v4'),
                 'synced': false,
                 'requests': []
             };
+            this.tags = {};
             this.basePath = '';
             this.collectionId = '';
             this.folders = {};
@@ -91,7 +92,7 @@ var uuidv4 = require('uuid/v4'),
                 this.basePath += json.basePath;
             }
 
-            if (json.schemes && json.schemes.indexOf('https') != -1) {
+            if (this.options.scheme === 'https' || (json.schemes && json.schemes.indexOf('https') != -1)) {
                 this.basePath = 'https://' + this.basePath;
             }
             else {
@@ -103,10 +104,28 @@ var uuidv4 = require('uuid/v4'),
             }
         },
 
+        getFolderName: function(operation, pathUrl) {
+            if (this.options.folderName === 'tags' && 
+                    operation.tags && 
+                    operation.tags.length > 0 &&
+                    operation.tags[0]) {
+                
+                var folderName = operation.tags[0];
+                if (!this.folders[folderName]) {
+                    this.folders[folderName] = this.createNewFolder(folderName);
+                }
+                this.logger('For path ' + pathUrl + ', returning folderName ' + this.folders[folderName].name);
+                return this.folders[folderName].name;
+            } else {
+                return this.getFolderNameForPath(pathUrl);
+            }
+        },
+
         getFolderNameForPath: function (pathUrl) {
             if (pathUrl == '/') {
                 return null;
             }
+
             var segments = pathUrl.split('/'),
                 numSegments = segments.length,
                 folderName = null;
@@ -131,15 +150,23 @@ var uuidv4 = require('uuid/v4'),
         },
 
         createNewFolder: function (name) {
+            var description = "Folder for " + name;
+            this.tags.forEach(function(tag) {
+                if (tag.name === name && tag.description) {
+                    description = tag.description;
+                }
+            });
+
             var newFolder = {
                 'id': uuidv4(),
                 'name': name,
-                'description': 'Folder for ' + name,
+                'description': description,
                 'order': [],
                 'collection_name': this.collectionJson.name,
                 'collection_id': this.collectionId,
                 'collection': this.collectionId
             };
+
             this.logger('Created folder ' + newFolder.name);
             return newFolder;
         },
@@ -328,7 +355,7 @@ var uuidv4 = require('uuid/v4'),
             }
         },
 
-        addPathItemToFolder: function (path, pathItem, folderName) {
+        addPathItemToFolder: function (path, pathItem, ) { //folderName) {
             if (pathItem.$ref) {
                 this.logger('Error - cannot handle $ref attributes');
                 return;
@@ -357,7 +384,7 @@ var uuidv4 = require('uuid/v4'),
                         path,
                         verb.toUpperCase(),
                         pathItem[verb],
-                        folderName,
+                        this.getFolderName(pathItem[verb], path),
                         paramsForPathItem
                     );
                 }
@@ -373,8 +400,8 @@ var uuidv4 = require('uuid/v4'),
             // Add a folder for each path
             for (path in paths) {
                 if (paths.hasOwnProperty(path)) {
-                    folderName = this.getFolderNameForPath(path);
-                    this.logger('Adding path item. path = ' + path + ' folder = ' + folderName);
+                    //folderName = this.getFolderNameForPath(paths[path], path);
+                    //this.logger('Adding path item. path = ' + path + ' folder = ' + folderName);
 
                     // Update a specific Operations parameters with any parent Resource parameters.
                     this.resourceParams = [];
@@ -385,7 +412,8 @@ var uuidv4 = require('uuid/v4'),
                                 this.resourceParams.push(paths[path].parameters[i]);
                             }
                         }
-                        this.addPathItemToFolder(path, paths[path], folderName);
+                        //this.addPathItemToFolder(path, paths[path], folderName);
+                        this.addPathItemToFolder(path, paths[path]);
                     }
                 }
             }
@@ -427,6 +455,8 @@ var uuidv4 = require('uuid/v4'),
             this.globalConsumes = json.consumes || [];
 
             this.globalProduces = json.produces || [];
+
+            this.tags = json.tags || [];
 
             // Pull reference-able parameter definitions into memory
             this.handleParams(json.parameters, 'collection');
